@@ -1,20 +1,45 @@
+"""
+StadiumFlow AI
+v0.2.0 – Football Fan Ticket Assistant
+
+A Streamlit prototype for football match fans.
+
+Core flow:
+1. Fan enters a ticket number.
+2. App loads ticket details from data/tickets.csv.
+3. App filters facilities from data/facilities.csv based on the fan's zone.
+4. MyZone AI answers match-day questions using ticket-specific context.
+
+Security note:
+- No personal data is stored.
+- Ticket data is mock data for prototype demonstration.
+- Gemini API key should be stored in Streamlit Secrets, not committed to GitHub.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Optional
+
 import pandas as pd
 import streamlit as st
 
-from stadium_engine import (
-    generate_fan_guidance,
-    generate_volunteer_brief,
-    rank_zones,
-)
 
+# ---------------------------------------------------------------------
+# Page configuration
+# ---------------------------------------------------------------------
 
 st.set_page_config(
     page_title="StadiumFlow AI",
-    page_icon="🏟️",
+    page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
+
+# ---------------------------------------------------------------------
+# Styling
+# ---------------------------------------------------------------------
 
 CUSTOM_CSS = """
 <style>
@@ -84,6 +109,12 @@ CUSTOM_CSS = """
         line-height: 1.55;
     }
 
+    .small-note {
+        color: #94a3b8;
+        font-size: 0.95rem;
+        line-height: 1.55;
+    }
+
     .reason-box {
         background: #0f172a;
         border-left: 4px solid #3b82f6;
@@ -93,47 +124,6 @@ CUSTOM_CSS = """
         color: #cbd5e1;
         font-size: 0.95rem;
         line-height: 1.55;
-    }
-
-    .scenario-box {
-        background: #111827;
-        border: 1px solid #263244;
-        border-radius: 16px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        color: #cbd5e1;
-    }
-
-    .risk-low {
-        background: #064e3b;
-        color: #d1fae5;
-        padding: 0.35rem 0.75rem;
-        border-radius: 999px;
-        font-weight: 800;
-    }
-
-    .risk-medium {
-        background: #78350f;
-        color: #fef3c7;
-        padding: 0.35rem 0.75rem;
-        border-radius: 999px;
-        font-weight: 800;
-    }
-
-    .risk-high {
-        background: #7c2d12;
-        color: #ffedd5;
-        padding: 0.35rem 0.75rem;
-        border-radius: 999px;
-        font-weight: 800;
-    }
-
-    .risk-critical {
-        background: #7f1d1d;
-        color: #fee2e2;
-        padding: 0.35rem 0.75rem;
-        border-radius: 999px;
-        font-weight: 800;
     }
 
     .stButton > button {
@@ -159,20 +149,10 @@ CUSTOM_CSS = """
         color: white;
     }
 
-    div[data-testid="stSidebar"] .stRadio label {
-        color: white;
-    }
-
     .footer-note {
         color: #94a3b8;
         font-size: 0.9rem;
         margin-top: 2rem;
-    }
-
-    .small-note {
-        color: #94a3b8;
-        font-size: 0.95rem;
-        line-height: 1.55;
     }
 </style>
 """
@@ -180,110 +160,263 @@ CUSTOM_CSS = """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
-FAN_SCENARIOS = {
-    "Custom scenario": {
-        "user_type": "General fan",
-        "location": "",
-        "need": "",
-        "language": "English",
-    },
-    "Post-match exit surge": {
-        "user_type": "General fan",
-        "location": "Exit Tunnel near Gate C",
-        "need": "I need the safest exit after the match because the main exit is crowded.",
-        "language": "Simple English",
-    },
-    "Family looking for food": {
-        "user_type": "Family with children",
-        "location": "North Stand",
-        "need": "We need a less crowded food area and a safe route with children.",
-        "language": "Simple English",
-    },
-    "International visitor needs transport": {
-        "user_type": "International visitor",
-        "location": "Gate B",
-        "need": "I need help finding transport after the match.",
-        "language": "English",
-    },
-    "Medical help near seating area": {
-        "user_type": "First-time visitor",
-        "location": "Section 214",
-        "need": "Someone nearby needs medical help.",
-        "language": "Simple English",
-    },
-}
+# ---------------------------------------------------------------------
+# Data loading
+# ---------------------------------------------------------------------
 
-ACCESSIBILITY_SCENARIOS = {
-    "Custom scenario": {
-        "visitor_need": "Wheelchair access",
-        "location": "",
-        "destination": "",
-        "crowd_condition": "Normal",
-    },
-    "Wheelchair route to seating": {
-        "visitor_need": "Wheelchair access",
-        "location": "Gate A",
-        "destination": "Accessible seating area near Block 102",
-        "crowd_condition": "Busy",
-    },
-    "Elderly visitor exit support": {
-        "visitor_need": "Elderly support",
-        "location": "South Stand",
-        "destination": "Nearest calm exit",
-        "crowd_condition": "High",
-    },
-    "Low vision visitor guidance": {
-        "visitor_need": "Low vision support",
-        "location": "Food Zone 1",
-        "destination": "Information desk",
-        "crowd_condition": "Busy",
-    },
-    "Lost child support": {
-        "visitor_need": "Family with children",
-        "location": "Parking Area",
-        "destination": "Lost and found support desk",
-        "crowd_condition": "Critical",
-    },
-}
-
-VOLUNTEER_SCENARIOS = {
-    "Custom scenario": {
-        "zone": "",
-        "issue_type": "Crowd buildup",
-        "risk": "Low",
-    },
-    "Gate crowd buildup": {
-        "zone": "Gate B",
-        "issue_type": "Crowd buildup",
-        "risk": "High",
-    },
-    "Lost fan near food zone": {
-        "zone": "Food Zone 1",
-        "issue_type": "Lost fan",
-        "risk": "Medium",
-    },
-    "Accessibility request near exit": {
-        "zone": "Exit Tunnel",
-        "issue_type": "Accessibility request",
-        "risk": "High",
-    },
-    "Medical support in stand": {
-        "zone": "North Stand",
-        "issue_type": "Medical support",
-        "risk": "Critical",
-    },
-}
+@st.cache_data
+def load_tickets() -> pd.DataFrame:
+    """Load mock football match ticket data."""
+    return pd.read_csv("data/tickets.csv")
 
 
-def render_hero():
+@st.cache_data
+def load_facilities() -> pd.DataFrame:
+    """Load mock stadium facility data."""
+    return pd.read_csv("data/facilities.csv")
+
+
+def get_ticket(ticket_id: str, tickets_df: pd.DataFrame) -> Optional[dict]:
+    """Return a ticket record if the ticket number exists."""
+    if not ticket_id:
+        return None
+
+    matched_ticket = tickets_df[
+        tickets_df["ticket_id"].str.upper() == ticket_id.strip().upper()
+    ]
+
+    if matched_ticket.empty:
+        return None
+
+    return matched_ticket.iloc[0].to_dict()
+
+
+def get_zone_facilities(zone: str, facilities_df: pd.DataFrame) -> pd.DataFrame:
+    """Return facilities that belong to the fan's ticket zone."""
+    return facilities_df[facilities_df["zone"] == zone].copy()
+
+
+# ---------------------------------------------------------------------
+# GenAI helpers
+# ---------------------------------------------------------------------
+
+def get_gemini_api_key() -> Optional[str]:
+    """
+    Read Gemini API key from Streamlit Secrets or environment variable.
+
+    Recommended Streamlit Cloud secret:
+    GEMINI_API_KEY = "your_api_key_here"
+    """
+    try:
+        if "GEMINI_API_KEY" in st.secrets:
+            return st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
+
+    return os.getenv("GEMINI_API_KEY")
+
+
+def build_fan_context(ticket: dict, zone_facilities: pd.DataFrame) -> str:
+    """Create grounded context for the GenAI assistant."""
+    facilities_text = "\n".join(
+        [
+            (
+                f"- {row['type']}: {row['name']} near Block {row['near_block']}, "
+                f"{row['level']}, {row['distance_minutes']} minutes away, "
+                f"status: {row['status']}"
+            )
+            for _, row in zone_facilities.iterrows()
+        ]
+    )
+
+    return f"""
+You are MyZone AI, a GenAI-powered football match-day assistant.
+
+Fan ticket context:
+- Fan name: {ticket["fan_name"]}
+- Match: {ticket["match"]}
+- Home team: {ticket["home_team"]}
+- Away team: {ticket["away_team"]}
+- Kickoff time: {ticket["kickoff_time"]}
+- Recommended gate: {ticket["gate"]}
+- Zone: {ticket["zone"]}
+- Stand: {ticket["stand"]}
+- Block: {ticket["block"]}
+- Row: {ticket["row"]}
+- Seat: {ticket["seat"]}
+- Suggested language: {ticket["preferred_language"]}
+
+Nearby facilities in this fan's zone:
+{facilities_text}
+
+Rules for your answer:
+- Give short, clear, match-day guidance.
+- Use only the fan's ticket zone unless the fan asks for wider stadium information.
+- Mention the nearest relevant facility when possible.
+- For emergencies, mention medical help, steward/security support, and nearest exit.
+- Do not invent facilities, gates, exits, or policies.
+- If information is missing, say what is missing and give the safest next step.
+"""
+
+
+def generate_fallback_answer(
+    question: str,
+    ticket: dict,
+    zone_facilities: pd.DataFrame,
+) -> str:
+    """
+    Safe fallback when Gemini is not configured.
+
+    This keeps the demo usable without exposing API keys.
+    """
+    question_lower = question.lower()
+
+    def nearest_facility(facility_type: str) -> Optional[pd.Series]:
+        matches = zone_facilities[
+            zone_facilities["type"].str.lower() == facility_type.lower()
+        ]
+
+        if matches.empty:
+            return None
+
+        return matches.sort_values("distance_minutes").iloc[0]
+
+    if (
+        "toilet" in question_lower
+        or "bathroom" in question_lower
+        or "restroom" in question_lower
+    ):
+        item = nearest_facility("Toilet")
+        if item is not None:
+            return (
+                f"The nearest toilet is {item['name']} near Block {item['near_block']}. "
+                f"It is about {item['distance_minutes']} minutes from your zone."
+            )
+
+    if (
+        "food" in question_lower
+        or "snack" in question_lower
+        or "eat" in question_lower
+    ):
+        item = nearest_facility("Food")
+        if item is not None:
+            return (
+                f"The nearest food stall is {item['name']} near Block {item['near_block']}. "
+                f"It is about {item['distance_minutes']} minutes away."
+            )
+
+    if "water" in question_lower or "drink" in question_lower:
+        item = nearest_facility("Water")
+        if item is not None:
+            return (
+                f"The nearest water point is {item['name']} near Block {item['near_block']}. "
+                f"It is about {item['distance_minutes']} minutes away."
+            )
+
+    if (
+        "medical" in question_lower
+        or "hurt" in question_lower
+        or "injury" in question_lower
+        or "emergency" in question_lower
+    ):
+        medical = nearest_facility("Medical")
+        security = nearest_facility("Security")
+        exit_point = nearest_facility("Exit")
+
+        parts = []
+
+        if medical is not None:
+            parts.append(f"Go to {medical['name']} near Block {medical['near_block']}.")
+
+        if security is not None:
+            parts.append(
+                f"Ask for help at {security['name']} near Block {security['near_block']}."
+            )
+
+        if exit_point is not None:
+            parts.append(
+                f"The nearest emergency exit is {exit_point['name']} near Block {exit_point['near_block']}."
+            )
+
+        return " ".join(parts) if parts else "Ask the nearest steward for immediate help."
+
+    if "seat" in question_lower or "gate" in question_lower:
+        return (
+            f"Use {ticket['gate']} and go to {ticket['stand']}, Block {ticket['block']}, "
+            f"Row {ticket['row']}, Seat {ticket['seat']}."
+        )
+
+    if "exit" in question_lower or "leave" in question_lower:
+        item = nearest_facility("Exit")
+        if item is not None:
+            return (
+                f"The nearest exit is {item['name']} near Block {item['near_block']}. "
+                f"It is about {item['distance_minutes']} minutes away."
+            )
+
+    return (
+        f"You are in {ticket['zone']} at {ticket['stand']}, Block {ticket['block']}. "
+        "Ask about toilets, food, water, medical help, exits, or your seat."
+    )
+
+
+def generate_myzone_ai_answer(
+    question: str,
+    ticket: dict,
+    zone_facilities: pd.DataFrame,
+) -> tuple[str, bool]:
+    """
+    Generate a MyZone AI answer.
+
+    Returns:
+        answer: The response text.
+        used_genai: True when Gemini generated the response, False for fallback.
+    """
+    api_key = get_gemini_api_key()
+
+    if not api_key:
+        return generate_fallback_answer(question, ticket, zone_facilities), False
+
+    try:
+        import google.generativeai as genai
+
+        genai.configure(api_key=api_key)
+
+        model = genai.GenerativeModel("gemini-1.5-flash")
+
+        prompt = f"""
+{build_fan_context(ticket, zone_facilities)}
+
+Fan question:
+{question}
+"""
+
+        response = model.generate_content(prompt)
+
+        if not response.text:
+            return generate_fallback_answer(question, ticket, zone_facilities), False
+
+        return response.text.strip(), True
+
+    except Exception:
+        return generate_fallback_answer(question, ticket, zone_facilities), False
+
+
+# ---------------------------------------------------------------------
+# UI rendering helpers
+# ---------------------------------------------------------------------
+
+def render_hero() -> None:
+    """Render the product hero section."""
     st.markdown(
         """
         <div class="hero-card">
-            <div class="hero-title">🏟️ StadiumFlow AI</div>
+            <div class="hero-title">⚽ StadiumFlow AI</div>
             <div class="hero-subtitle">
-                A GenAI-enabled stadium operations and fan-support assistant for large tournaments.
-                It helps fans, volunteers, organizers, and venue staff with crowd awareness,
-                accessibility support, multilingual-style guidance, and real-time decision support.
+                A GenAI-powered football match assistant for ticketed fans.
+                Enter a ticket number to get personalised seat guidance, nearby toilets,
+                food stalls, water points, medical help, steward support, emergency exits,
+                and match-day assistance based on your exact stadium zone.
             </div>
         </div>
         """,
@@ -291,17 +424,10 @@ def render_hero():
     )
 
 
-def risk_class(risk):
-    return {
-        "Low": "risk-low",
-        "Medium": "risk-medium",
-        "High": "risk-high",
-        "Critical": "risk-critical",
-    }.get(risk, "risk-low")
-
-
-def render_reason(title, points):
+def render_reason(title: str, points: list[str]) -> None:
+    """Render a short explanation box for reviewers."""
     joined_points = "<br>".join([f"• {point}" for point in points])
+
     st.markdown(
         f"""
         <div class="reason-box">
@@ -313,413 +439,289 @@ def render_reason(title, points):
     )
 
 
-render_hero()
+def render_sidebar() -> None:
+    """Render sidebar information for reviewers."""
+    st.sidebar.title("StadiumFlow AI")
+    st.sidebar.caption("v0.2.0 – Football Fan Ticket Assistant")
 
-st.sidebar.title("Control Center")
-st.sidebar.caption("Choose the assistant workflow.")
+    st.sidebar.divider()
 
-mode = st.sidebar.radio(
-    "Assistant Mode",
-    [
-        "Fan Assistant",
-        "Crowd Intelligence Dashboard",
-        "Volunteer Briefing Generator",
-        "Accessibility Support",
-    ],
-)
+    st.sidebar.markdown("### Demo Tickets")
+    st.sidebar.code("SF-FB-EAST-A12-0823")
+    st.sidebar.code("SF-FB-NORTH-B04-1145")
+    st.sidebar.code("SF-FB-WEST-C09-0520")
 
-st.sidebar.divider()
-st.sidebar.markdown("### Live Prototype")
-st.sidebar.markdown(
-    """
-Designed for stadium staff, volunteers, and fans during high-pressure tournament operations.
-"""
-)
+    st.sidebar.divider()
 
-if mode == "Fan Assistant":
-    st.markdown('<span class="mode-pill">Fan Experience</span>', unsafe_allow_html=True)
-    st.header("Fan Assistant")
+    st.sidebar.markdown("### Scope")
+    st.sidebar.markdown(
+        """
+        Built only for football match fans.
 
+        The app uses ticket data to personalise:
+        - Gate and seat guidance
+        - Zone-specific facilities
+        - Emergency help
+        - GenAI match-day support
+        """
+    )
+
+
+def render_ticket_login(tickets_df: pd.DataFrame) -> None:
+    """Render ticket login screen."""
     st.markdown(
-        '<p class="small-note">Generate short, safe, context-aware guidance for fans inside or around the stadium.</p>',
+        '<span class="mode-pill">Football Fan Ticket Login</span>',
         unsafe_allow_html=True,
     )
 
-    selected_scenario = st.selectbox(
-        "Quick test scenario",
-        list(FAN_SCENARIOS.keys()),
-        help="Use a sample scenario so reviewers can test the assistant quickly.",
+    st.header("Enter Your Football Match Ticket")
+
+    st.markdown(
+        """
+        <p class="small-note">
+            This prototype simulates ticket login using mock football ticket data.
+            In production, this step would connect to a real ticketing or QR validation system.
+        </p>
+        """,
+        unsafe_allow_html=True,
     )
 
-    scenario = FAN_SCENARIOS[selected_scenario]
+    demo_ticket = "SF-FB-EAST-A12-0823"
 
-    if selected_scenario != "Custom scenario":
+    with st.form("ticket_login_form"):
+        ticket_id = st.text_input(
+            "Ticket number",
+            placeholder=demo_ticket,
+        )
+
+        submitted = st.form_submit_button("Login with Ticket")
+
+    if submitted:
+        ticket = get_ticket(ticket_id, tickets_df)
+
+        if ticket is None:
+            st.error("Invalid ticket number. Try one of the demo tickets in the sidebar.")
+        else:
+            st.session_state.ticket = ticket
+            st.rerun()
+
+    st.info(f"Fast demo: use ticket number `{demo_ticket}`.")
+
+
+def render_match_dashboard(ticket: dict) -> None:
+    """Render personalised football match details."""
+    st.markdown(
+        f"""
+        <div class="result-card">
+            <h3>⚽ {ticket["match"]}</h3>
+            <p>
+                <b>Kickoff:</b> {ticket["kickoff_time"]}<br>
+                <b>Recommended gate:</b> {ticket["gate"]}<br>
+                <b>Zone:</b> {ticket["zone"]}<br>
+                <b>Seat:</b> {ticket["stand"]}, Block {ticket["block"]}, Row {ticket["row"]}, Seat {ticket["seat"]}<br>
+                <b>Suggested language:</b> {ticket["preferred_language"]}
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    cols = st.columns(4)
+
+    cols[0].metric("Gate", ticket["gate"])
+    cols[1].metric("Stand", ticket["stand"])
+    cols[2].metric("Block", ticket["block"])
+    cols[3].metric("Seat", f"Row {ticket['row']} / Seat {ticket['seat']}")
+
+
+def render_zone_facilities(ticket: dict, zone_facilities: pd.DataFrame) -> None:
+    """Render ticket-zone-specific facilities."""
+    st.subheader("My Zone Facilities")
+
+    st.markdown(
+        f"""
+        <p class="small-note">
+            Showing only facilities near <b>{ticket["zone"]}</b> and <b>{ticket["stand"]}</b>.
+            The fan does not need the whole stadium map during a live football match.
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    display_columns = [
+        "type",
+        "name",
+        "near_block",
+        "level",
+        "distance_minutes",
+        "status",
+    ]
+
+    st.dataframe(
+        zone_facilities[display_columns],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    render_reason(
+        "Why this is personalised",
+        [
+            f"The ticket places the fan in {ticket['zone']}.",
+            "The app filters facilities using the fan's zone instead of showing the full stadium.",
+            "The same ticket context is passed to MyZone AI for grounded answers.",
+        ],
+    )
+
+
+def render_emergency_help(zone_facilities: pd.DataFrame) -> None:
+    """Render emergency support cards for the fan's zone."""
+    st.subheader("Emergency Help")
+
+    medical = zone_facilities[zone_facilities["type"] == "Medical"]
+    security = zone_facilities[zone_facilities["type"] == "Security"]
+    exit_point = zone_facilities[zone_facilities["type"] == "Exit"]
+
+    e1, e2, e3 = st.columns(3)
+
+    with e1:
+        if not medical.empty:
+            item = medical.iloc[0]
+            st.error(f"Medical: {item['name']} near Block {item['near_block']}")
+        else:
+            st.error("Medical: Ask nearest steward")
+
+    with e2:
+        if not security.empty:
+            item = security.iloc[0]
+            st.warning(f"Steward: {item['name']} near Block {item['near_block']}")
+        else:
+            st.warning("Steward: Ask visible stadium staff")
+
+    with e3:
+        if not exit_point.empty:
+            item = exit_point.iloc[0]
+            st.info(f"Exit: {item['name']} near Block {item['near_block']}")
+        else:
+            st.info("Exit: Follow emergency signage")
+
+
+def render_myzone_ai(ticket: dict, zone_facilities: pd.DataFrame) -> None:
+    """Render GenAI assistant section."""
+    st.subheader("Ask MyZone AI")
+
+    st.markdown(
+        """
+        <p class="small-note">
+            MyZone AI uses the fan's ticket, seat, gate, zone, and nearby facilities as context.
+            It answers football match-day questions without exposing the full stadium dataset.
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    example_questions = [
+        "Where is the nearest toilet?",
+        "How do I reach my seat?",
+        "Where can I get water?",
+        "Someone needs medical help near me. What should I do?",
+        "Where is the nearest exit after the match?",
+    ]
+
+    selected_question = st.selectbox(
+        "Try a sample question",
+        ["Write my own question"] + example_questions,
+    )
+
+    default_question = "" if selected_question == "Write my own question" else selected_question
+
+    user_question = st.text_area(
+        "Your question",
+        value=default_question,
+        placeholder="Example: Where is the nearest toilet?",
+        height=100,
+    )
+
+    if st.button("Ask MyZone AI"):
+        if not user_question.strip():
+            st.error("Please enter a question.")
+            return
+
+        answer, used_genai = generate_myzone_ai_answer(
+            question=user_question,
+            ticket=ticket,
+            zone_facilities=zone_facilities,
+        )
+
+        if used_genai:
+            st.success(answer)
+            st.caption("Generated using Gemini with ticket-zone context.")
+        else:
+            st.warning(answer)
+            st.caption(
+                "Fallback response shown because Gemini API key is not configured or the GenAI call failed."
+            )
+
+
+def render_app(tickets_df: pd.DataFrame, facilities_df: pd.DataFrame) -> None:
+    """Render the main app flow."""
+    if "ticket" not in st.session_state:
+        st.session_state.ticket = None
+
+    render_hero()
+
+    if st.session_state.ticket is None:
+        render_ticket_login(tickets_df)
+        return
+
+    ticket = st.session_state.ticket
+    zone_facilities = get_zone_facilities(ticket["zone"], facilities_df)
+
+    top_left, top_right = st.columns([3, 1])
+
+    with top_left:
         st.markdown(
-            f"""
-            <div class="scenario-box">
-                Sample loaded: <b>{selected_scenario}</b>
-            </div>
-            """,
+            '<span class="mode-pill">My Match Assistant</span>',
             unsafe_allow_html=True,
         )
+        st.header(f"Welcome, {ticket['fan_name']}")
 
-    left, right = st.columns([1, 1])
+    with top_right:
+        if st.button("Logout"):
+            st.session_state.ticket = None
+            st.rerun()
 
-    with left:
-        user_type = st.selectbox(
-            "Fan type",
-            [
-                "General fan",
-                "Family with children",
-                "Elderly visitor",
-                "International visitor",
-                "First-time visitor",
-            ],
-            index=[
-                "General fan",
-                "Family with children",
-                "Elderly visitor",
-                "International visitor",
-                "First-time visitor",
-            ].index(scenario["user_type"]),
-        )
-
-        location = st.text_input(
-            "Current location",
-            value=scenario["location"],
-            placeholder="Example: Gate C, North Stand, Food Zone 2",
-        )
-
-    with right:
-        language = st.selectbox(
-            "Guidance style",
-            [
-                "English",
-                "Simple English",
-                "Hindi-style English",
-                "Spanish-style English",
-            ],
-            index=[
-                "English",
-                "Simple English",
-                "Hindi-style English",
-                "Spanish-style English",
-            ].index(scenario["language"]),
-        )
-
-        need = st.text_area(
-            "What does the fan need?",
-            value=scenario["need"],
-            placeholder="Example: I need the safest exit after the match.",
-            height=120,
-        )
-
-    if st.button("Generate fan guidance"):
-        if not location.strip() or not need.strip():
-            st.error("Please enter both location and fan need.")
-        else:
-            guidance = generate_fan_guidance(user_type, location, need, language)
-            st.success(guidance)
-
-            render_reason(
-                "Why this recommendation?",
-                [
-                    f"The user is classified as: {user_type}.",
-                    f"The current location is: {location}.",
-                    f"The request is interpreted as: {need}.",
-                    f"The response style is adapted for: {language}.",
-                ],
-            )
-
-elif mode == "Crowd Intelligence Dashboard":
-    st.markdown('<span class="mode-pill">Operations Intelligence</span>', unsafe_allow_html=True)
-    st.header("Crowd Intelligence Dashboard")
+    render_match_dashboard(ticket)
+    render_zone_facilities(ticket, zone_facilities)
+    render_emergency_help(zone_facilities)
+    render_myzone_ai(ticket, zone_facilities)
 
     st.markdown(
-        '<p class="small-note">Enter live conditions for key stadium zones. The assistant ranks zones by operational risk.</p>',
+        """
+        <div class="footer-note">
+            Built with Python and Streamlit. This prototype uses mock ticket and facility data,
+            avoids storing personal data, and demonstrates ticket-aware GenAI support for football match fans.
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
-    scenario_mode = st.selectbox(
-        "Crowd scenario",
-        ["Balanced crowd", "Match entry rush", "Halftime food crowd", "Post-match exit surge"],
-        help="Preset examples make the operational dashboard easier to test.",
-    )
 
-    if scenario_mode == "Match entry rush":
-        default_zones = [
-            {"zone": "Gate A", "crowd_level": 5, "wait_time": 35, "incident_count": 2},
-            {"zone": "Gate B", "crowd_level": 4, "wait_time": 25, "incident_count": 1},
-            {"zone": "Food Zone 1", "crowd_level": 2, "wait_time": 8, "incident_count": 0},
-            {"zone": "Parking Area", "crowd_level": 4, "wait_time": 22, "incident_count": 1},
-            {"zone": "Exit Tunnel", "crowd_level": 2, "wait_time": 5, "incident_count": 0},
-        ]
-    elif scenario_mode == "Halftime food crowd":
-        default_zones = [
-            {"zone": "Gate A", "crowd_level": 2, "wait_time": 5, "incident_count": 0},
-            {"zone": "Gate B", "crowd_level": 2, "wait_time": 5, "incident_count": 0},
-            {"zone": "Food Zone 1", "crowd_level": 5, "wait_time": 30, "incident_count": 2},
-            {"zone": "Parking Area", "crowd_level": 1, "wait_time": 2, "incident_count": 0},
-            {"zone": "Exit Tunnel", "crowd_level": 3, "wait_time": 8, "incident_count": 0},
-        ]
-    elif scenario_mode == "Post-match exit surge":
-        default_zones = [
-            {"zone": "Gate A", "crowd_level": 4, "wait_time": 20, "incident_count": 1},
-            {"zone": "Gate B", "crowd_level": 5, "wait_time": 40, "incident_count": 3},
-            {"zone": "Food Zone 1", "crowd_level": 2, "wait_time": 5, "incident_count": 0},
-            {"zone": "Parking Area", "crowd_level": 5, "wait_time": 45, "incident_count": 2},
-            {"zone": "Exit Tunnel", "crowd_level": 5, "wait_time": 38, "incident_count": 3},
-        ]
-    else:
-        default_zones = [
-            {"zone": "Gate A", "crowd_level": 3, "wait_time": 10, "incident_count": 0},
-            {"zone": "Gate B", "crowd_level": 3, "wait_time": 10, "incident_count": 0},
-            {"zone": "Food Zone 1", "crowd_level": 3, "wait_time": 10, "incident_count": 0},
-            {"zone": "Parking Area", "crowd_level": 3, "wait_time": 10, "incident_count": 0},
-            {"zone": "Exit Tunnel", "crowd_level": 3, "wait_time": 10, "incident_count": 0},
-        ]
+# ---------------------------------------------------------------------
+# App entry point
+# ---------------------------------------------------------------------
 
-    zone_data = []
-    cols = st.columns(2)
+try:
+    tickets = load_tickets()
+    facilities = load_facilities()
 
-    for index, zone_item in enumerate(default_zones):
-        zone = zone_item["zone"]
+    render_sidebar()
+    render_app(tickets, facilities)
 
-        with cols[index % 2]:
-            with st.expander(f"📍 {zone}", expanded=index < 2):
-                crowd_level = st.slider(
-                    f"Crowd level at {zone}",
-                    min_value=1,
-                    max_value=5,
-                    value=zone_item["crowd_level"],
-                    key=f"crowd_{scenario_mode}_{zone}",
-                    help="1 means light crowd, 5 means very dense crowd.",
-                )
+except FileNotFoundError as missing_file_error:
+    st.error("Required data file is missing.")
+    st.code(str(missing_file_error))
+    st.info("Check that data/tickets.csv and data/facilities.csv exist in the repo.")
 
-                wait_time = st.slider(
-                    f"Estimated wait time at {zone} in minutes",
-                    min_value=0,
-                    max_value=60,
-                    value=zone_item["wait_time"],
-                    key=f"wait_{scenario_mode}_{zone}",
-                )
-
-                incident_count = st.number_input(
-                    f"Reported incidents at {zone}",
-                    min_value=0,
-                    max_value=20,
-                    value=zone_item["incident_count"],
-                    key=f"incident_{scenario_mode}_{zone}",
-                )
-
-                zone_data.append(
-                    {
-                        "zone": zone,
-                        "crowd_level": crowd_level,
-                        "wait_time": wait_time,
-                        "incident_count": incident_count,
-                    }
-                )
-
-    if st.button("Analyze stadium risk"):
-        ranked = rank_zones(zone_data)
-        df = pd.DataFrame(ranked)
-
-        top_zone = ranked[0]
-        css_class = risk_class(top_zone["risk"])
-
-        st.markdown(
-            f"""
-            <div class="result-card">
-                <h3>Highest Attention Needed</h3>
-                <p><b>{top_zone["zone"]}</b></p>
-                <p>
-                    <span class="{css_class}">{top_zone["risk"]}</span>
-                    &nbsp; Risk Score: <b>{top_zone["risk_score"]}/100</b>
-                </p>
-                <p>{top_zone["recommendation"]}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        render_reason(
-            "Why this zone is prioritized?",
-            [
-                f"Crowd level: {top_zone['crowd_level']} / 5.",
-                f"Estimated wait time: {top_zone['wait_time']} minutes.",
-                f"Reported incidents: {top_zone['incident_count']}.",
-                "The assistant ranks zones by combined crowd pressure, delay, and incident risk.",
-            ],
-        )
-
-        st.subheader("Ranked Risk Zones")
-        st.dataframe(
-            df[
-                [
-                    "zone",
-                    "crowd_level",
-                    "wait_time",
-                    "incident_count",
-                    "risk_score",
-                    "risk",
-                    "recommendation",
-                ]
-            ],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-elif mode == "Volunteer Briefing Generator":
-    st.markdown('<span class="mode-pill">Volunteer Operations</span>', unsafe_allow_html=True)
-    st.header("Volunteer Briefing Generator")
-
-    st.markdown(
-        '<p class="small-note">Create short operational instructions for volunteers based on zone, issue type, and risk level.</p>',
-        unsafe_allow_html=True,
-    )
-
-    selected_scenario = st.selectbox(
-        "Quick test scenario",
-        list(VOLUNTEER_SCENARIOS.keys()),
-    )
-
-    scenario = VOLUNTEER_SCENARIOS[selected_scenario]
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        zone = st.text_input("Assigned zone", value=scenario["zone"], placeholder="Example: Gate B")
-
-    with col2:
-        issue_options = [
-            "Crowd buildup",
-            "Lost fan",
-            "Medical support",
-            "Transport confusion",
-            "Accessibility request",
-            "Queue management",
-        ]
-        issue_type = st.selectbox(
-            "Issue type",
-            issue_options,
-            index=issue_options.index(scenario["issue_type"]),
-        )
-
-    with col3:
-        risk_options = ["Low", "Medium", "High", "Critical"]
-        risk = st.selectbox(
-            "Risk level",
-            risk_options,
-            index=risk_options.index(scenario["risk"]),
-        )
-
-    if st.button("Generate volunteer brief"):
-        if not zone.strip():
-            st.error("Please enter the assigned zone.")
-        else:
-            brief = generate_volunteer_brief(issue_type, zone, risk)
-            st.info(brief)
-
-            render_reason(
-                "Why this briefing?",
-                [
-                    f"The assigned zone is: {zone}.",
-                    f"The active issue is: {issue_type}.",
-                    f"The operational risk level is: {risk}.",
-                    "The assistant keeps instructions short so volunteers can act quickly.",
-                ],
-            )
-
-elif mode == "Accessibility Support":
-    st.markdown('<span class="mode-pill">Inclusive Stadium Support</span>', unsafe_allow_html=True)
-    st.header("Accessibility Support")
-
-    st.markdown(
-        '<p class="small-note">Generate accessibility-aware guidance for visitors who need safer, clearer movement support.</p>',
-        unsafe_allow_html=True,
-    )
-
-    selected_scenario = st.selectbox(
-        "Quick test scenario",
-        list(ACCESSIBILITY_SCENARIOS.keys()),
-    )
-
-    scenario = ACCESSIBILITY_SCENARIOS[selected_scenario]
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        visitor_options = [
-            "Wheelchair access",
-            "Elderly support",
-            "Low vision support",
-            "Hearing support",
-            "Family with children",
-            "Lost visitor support",
-        ]
-
-        visitor_need = st.selectbox(
-            "Visitor need",
-            visitor_options,
-            index=visitor_options.index(scenario["visitor_need"]),
-        )
-
-        location = st.text_input(
-            "Current location",
-            value=scenario["location"],
-            placeholder="Example: South Stand",
-        )
-
-    with col2:
-        destination = st.text_input(
-            "Destination",
-            value=scenario["destination"],
-            placeholder="Example: Accessible seating area",
-        )
-
-        crowd_options = ["Normal", "Busy", "High", "Critical"]
-
-        crowd_condition = st.selectbox(
-            "Nearby crowd condition",
-            crowd_options,
-            index=crowd_options.index(scenario["crowd_condition"]),
-        )
-
-    if st.button("Create accessible guidance"):
-        if not location.strip() or not destination.strip():
-            st.error("Please enter both current location and destination.")
-        else:
-            if crowd_condition in ["High", "Critical"]:
-                route_note = "Avoid the nearest crowded route and assign volunteer escort support."
-            elif crowd_condition == "Busy":
-                route_note = "Use a calmer accessible route, even if it takes slightly longer."
-            else:
-                route_note = "Use the shortest accessible route with clear signage."
-
-            st.success(
-                f"For {visitor_need.lower()}, guide the visitor from {location} to {destination}. "
-                f"{route_note} Prefer ramps, elevators, staff-assisted lanes, calm instructions, "
-                "and visible checkpoints."
-            )
-
-            render_reason(
-                "Why this accessibility route?",
-                [
-                    f"The visitor need is: {visitor_need}.",
-                    f"The current location is: {location}.",
-                    f"The destination is: {destination}.",
-                    f"The nearby crowd condition is: {crowd_condition}.",
-                    "The assistant prioritizes safety, clarity, and staff support over speed.",
-                ],
-            )
-
-st.markdown(
-    """
-    <div class="footer-note">
-        Built with Python and Streamlit. This prototype uses transparent decision logic,
-        does not store personal data, and is designed for the Smart Stadiums & Tournament Experience challenge.
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+except Exception as app_error:
+    st.error("Something went wrong while loading StadiumFlow AI.")
+    st.code(str(app_error))
