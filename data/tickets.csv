@@ -1,4 +1,7 @@
 ticket_id,fan_name,match,home_team,away_team,kickoff_time,gate,zone,stand,block,row,seat,preferred_language
-SF-FB-EAST-A12-0823,Ravi Kumar,India FC vs Kerala Blasters,India FC,Kerala Blasters,19:30,Gate 3,East Zone,East Stand,A12,08,23,Telugu
-SF-FB-NORTH-B04-1145,Aisha Khan,India FC vs Kerala Blasters,India FC,Kerala Blasters,19:30,Gate 1,North Zone,North Stand,B04,11,45,Hindi
-SF-FB-WEST-C09-0520,John Mathew,India FC vs Kerala Blasters,India FC,Kerala Blasters,19:30,Gate 5,West Zone,West Stand,C09,05,20,English
+WC26-FINAL-EAST-128-22-14,Sofia Alvarez,Argentina vs Spain,Argentina,Spain,15:00 ET,Gate E,East Zone,East Stand,128,22,14,Spanish
+WC26-FINAL-WEST-139-18-08,Lucas Martinez,Argentina vs Spain,Argentina,Spain,15:00 ET,Gate W,West Zone,West Stand,139,18,08,Spanish
+WC26-FINAL-NORTH-203-11-21,Emily Carter,Argentina vs Spain,Argentina,Spain,15:00 ET,Gate N,North Zone,North Stand,203,11,21,English
+WC26-FINAL-SOUTH-115-07-32,Diego Fernandez,Argentina vs Spain,Argentina,Spain,15:00 ET,Gate S,South Zone,South Stand,115,07,32,Spanish
+WC26-FINAL-EAST-131-15-05,Aarav Mehta,Argentina vs Spain,Argentina,Spain,15:00 ET,Gate E,East Zone,East Stand,131,15,05,English
+WC26-FINAL-WEST-142-24-19,Marina Lopez,Argentina vs Spain,Argentina,Spain,15:00 ET,Gate W,West Zone,West Stand,142,24,19,Spanish
