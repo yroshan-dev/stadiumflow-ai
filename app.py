@@ -392,8 +392,20 @@ def generate_fallback_answer(
     Safe fallback when Gemini is not configured.
 
     This keeps the demo usable without exposing API keys.
+    The matching uses whole-word checks to avoid mistakes such as
+    matching 'eat' inside 'seat'.
     """
+    import re
+
     question_lower = question.lower()
+
+    def has_any_word(words: list[str]) -> bool:
+        """Return True if any whole word or phrase appears in the question."""
+        for word in words:
+            pattern = r"\b" + re.escape(word.lower()) + r"\b"
+            if re.search(pattern, question_lower):
+                return True
+        return False
 
     def nearest_facility(facility_type: str) -> Optional[pd.Series]:
         matches = zone_facilities[
@@ -405,11 +417,15 @@ def generate_fallback_answer(
 
         return matches.sort_values("distance_minutes").iloc[0]
 
-    if (
-        "toilet" in question_lower
-        or "bathroom" in question_lower
-        or "restroom" in question_lower
-    ):
+    # Seat and gate guidance should be checked before food,
+    # because the word "seat" contains "eat".
+    if has_any_word(["seat", "seating", "gate", "block", "row"]):
+        return (
+            f"Use {ticket['gate']} and go to {ticket['stand']}, Block {ticket['block']}, "
+            f"Row {ticket['row']}, Seat {ticket['seat']}."
+        )
+
+    if has_any_word(["toilet", "bathroom", "restroom", "washroom"]):
         item = nearest_facility("Toilet")
         if item is not None:
             return (
@@ -417,11 +433,7 @@ def generate_fallback_answer(
                 f"It is about {item['distance_minutes']} minutes from your zone."
             )
 
-    if (
-        "food" in question_lower
-        or "snack" in question_lower
-        or "eat" in question_lower
-    ):
+    if has_any_word(["food", "snack", "eat", "meal", "stall"]):
         item = nearest_facility("Food")
         if item is not None:
             return (
@@ -429,7 +441,7 @@ def generate_fallback_answer(
                 f"It is about {item['distance_minutes']} minutes away."
             )
 
-    if "water" in question_lower or "drink" in question_lower:
+    if has_any_word(["water", "drink", "refill"]):
         item = nearest_facility("Water")
         if item is not None:
             return (
@@ -437,12 +449,7 @@ def generate_fallback_answer(
                 f"It is about {item['distance_minutes']} minutes away."
             )
 
-    if (
-        "medical" in question_lower
-        or "hurt" in question_lower
-        or "injury" in question_lower
-        or "emergency" in question_lower
-    ):
+    if has_any_word(["medical", "hurt", "injury", "emergency", "doctor", "first aid"]):
         medical = nearest_facility("Medical")
         security = nearest_facility("Security")
         exit_point = nearest_facility("Exit")
@@ -464,13 +471,7 @@ def generate_fallback_answer(
 
         return " ".join(parts) if parts else "Ask the nearest steward for immediate help."
 
-    if "seat" in question_lower or "gate" in question_lower:
-        return (
-            f"Use {ticket['gate']} and go to {ticket['stand']}, Block {ticket['block']}, "
-            f"Row {ticket['row']}, Seat {ticket['seat']}."
-        )
-
-    if "exit" in question_lower or "leave" in question_lower:
+    if has_any_word(["exit", "leave", "leaving"]):
         item = nearest_facility("Exit")
         if item is not None:
             return (
@@ -480,7 +481,7 @@ def generate_fallback_answer(
 
     return (
         f"You are in {ticket['zone']} at {ticket['stand']}, Block {ticket['block']}. "
-        "Ask about toilets, food, water, medical help, exits, or your seat."
+        "Ask about your seat, toilets, food, water, medical help, or exits."
     )
 
 
