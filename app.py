@@ -571,9 +571,9 @@ def render_sidebar() -> None:
     st.sidebar.divider()
 
     st.sidebar.markdown("### Demo Tickets")
-    st.sidebar.code("SF-FB-EAST-A12-0823")
-    st.sidebar.code("SF-FB-NORTH-B04-1145")
-    st.sidebar.code("SF-FB-WEST-C09-0520")
+    st.sidebar.code("WC26-FINAL-EAST-128-22-14")
+    st.sidebar.code("WC26-FINAL-WEST-139-18-08")
+    st.sidebar.code("WC26-FINAL-NORTH-203-11-21")
 
     st.sidebar.divider()
 
@@ -635,7 +635,7 @@ def render_ticket_login(tickets_df: pd.DataFrame) -> None:
         unsafe_allow_html=True,
     )
 
-    demo_ticket = "SF-FB-EAST-A12-0823"
+   demo_ticket = "WC26-FINAL-EAST-128-22-14"
 
     with st.form("ticket_login_form"):
         ticket_id = st.text_input(
