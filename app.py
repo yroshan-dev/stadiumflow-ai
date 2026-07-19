@@ -635,7 +635,7 @@ def render_ticket_login(tickets_df: pd.DataFrame) -> None:
         unsafe_allow_html=True,
     )
 
-   demo_ticket = "WC26-FINAL-EAST-128-22-14"
+    demo_ticket = "WC26-FINAL-EAST-128-22-14"
 
     with st.form("ticket_login_form"):
         ticket_id = st.text_input(
