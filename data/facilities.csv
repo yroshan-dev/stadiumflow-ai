@@ -1,19 +1,25 @@
 facility_id,type,name,zone,stand,near_block,level,distance_minutes,status
-F001,Toilet,East Toilet 1,East Zone,East Stand,A10,Level 1,3,Open
-F002,Food,East Snack Stall E4,East Zone,East Stand,A11,Level 1,2,Open
-F003,Water,Water Point W3,East Zone,East Stand,A11,Level 1,2,Open
-F004,Medical,Medical Room E1,East Zone,East Stand,A09,Level 1,4,Open
-F005,Exit,Emergency Exit E2,East Zone,East Stand,A13,Level 1,2,Open
-F006,Security,Steward Desk S2,East Zone,East Stand,A12,Level 1,1,Open
-F007,Toilet,North Toilet 2,North Zone,North Stand,B03,Level 1,2,Open
-F008,Food,North Grill Stall N2,North Zone,North Stand,B05,Level 1,4,Open
-F009,Water,Water Point N1,North Zone,North Stand,B04,Level 1,1,Open
-F010,Medical,Medical Room N1,North Zone,North Stand,B02,Level 1,3,Open
-F011,Exit,Emergency Exit N3,North Zone,North Stand,B06,Level 1,2,Open
-F012,Security,Steward Desk N1,North Zone,North Stand,B04,Level 1,1,Open
-F013,Toilet,West Toilet 1,West Zone,West Stand,C08,Level 1,3,Open
-F014,Food,West Snacks W2,West Zone,West Stand,C10,Level 1,2,Open
-F015,Water,Water Point W1,West Zone,West Stand,C09,Level 1,1,Open
-F016,Medical,Medical Room W1,West Zone,West Stand,C07,Level 1,4,Open
-F017,Exit,Emergency Exit W2,West Zone,West Stand,C11,Level 1,2,Open
-F018,Security,Steward Desk W1,West Zone,West Stand,C09,Level 1,1,Open
+F001,Toilet,East Restroom E1,East Zone,East Stand,128,Level 1,3,Open
+F002,Food,East Concourse Food Court,East Zone,East Stand,130,Level 1,4,Open
+F003,Water,East Water Refill Point,East Zone,East Stand,129,Level 1,2,Open
+F004,Medical,East First Aid Room,East Zone,East Stand,127,Level 1,5,Open
+F005,Exit,East Emergency Exit E2,East Zone,East Stand,132,Level 1,3,Open
+F006,Security,East Steward Desk,East Zone,East Stand,128,Level 1,1,Open
+F007,Toilet,West Restroom W1,West Zone,West Stand,140,Level 1,3,Open
+F008,Food,West Grill & Snacks,West Zone,West Stand,141,Level 1,4,Open
+F009,Water,West Water Refill Point,West Zone,West Stand,139,Level 1,2,Open
+F010,Medical,West First Aid Room,West Zone,West Stand,138,Level 1,5,Open
+F011,Exit,West Emergency Exit W3,West Zone,West Stand,143,Level 1,3,Open
+F012,Security,West Steward Desk,West Zone,West Stand,139,Level 1,1,Open
+F013,Toilet,North Restroom N2,North Zone,North Stand,203,Level 2,2,Open
+F014,Food,North Fan Snacks,North Zone,North Stand,204,Level 2,3,Open
+F015,Water,North Water Refill Point,North Zone,North Stand,202,Level 2,2,Open
+F016,Medical,North First Aid Room,North Zone,North Stand,201,Level 2,5,Open
+F017,Exit,North Emergency Exit N1,North Zone,North Stand,205,Level 2,3,Open
+F018,Security,North Steward Desk,North Zone,North Stand,203,Level 2,1,Open
+F019,Toilet,South Restroom S1,South Zone,South Stand,115,Level 1,2,Open
+F020,Food,South Concourse Food Stand,South Zone,South Stand,116,Level 1,3,Open
+F021,Water,South Water Refill Point,South Zone,South Stand,114,Level 1,2,Open
+F022,Medical,South First Aid Room,South Zone,South Stand,113,Level 1,5,Open
+F023,Exit,South Emergency Exit S2,South Zone,South Stand,117,Level 1,3,Open
+F024,Security,South Steward Desk,South Zone,South Stand,115,Level 1,1,Open
