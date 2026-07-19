@@ -1,98 +1,37 @@
 # StadiumFlow AI
 
-StadiumFlow AI is a GenAI-enabled smart stadium assistant built for the Smart Stadiums & Tournament Experience challenge.
+StadiumFlow AI is a GenAI-powered football match assistant for ticketed fans.
 
-The solution supports fans, volunteers, organizers, and venue staff during large tournaments such as the FIFA World Cup 2026. It helps improve stadium navigation, crowd management, accessibility support, multilingual-style assistance, and real-time operational decision support.
+Instead of showing every fan the same generic stadium map, the app uses a fan's ticket number to personalise match-day guidance. After login, the system loads the fan's match, gate, zone, stand, block, row, seat, and preferred language. It then shows nearby toilets, food stalls, water points, medical rooms, steward desks, and emergency exits relevant to that fan's ticket zone.
 
 ## Chosen Vertical
 
-Smart Stadiums & Tournament Experience.
+Football match fan support.
 
-## Problem Statement
+This version focuses only on ticketed football match fans. It does not try to serve volunteers, stadium administrators, vendors, police, or general event operations. The narrower scope keeps the product easier to test, easier to understand, and more useful for one clear user group.
 
-Large stadium events create operational pressure for fans and venue teams. Fans may struggle with navigation, exits, transport, accessibility needs, food zones, queues, and emergency support. Venue staff and volunteers also need fast, clear, and context-aware instructions during crowded situations.
+## Problem
 
-A normal information page is not enough because stadium conditions can change quickly. StadiumFlow AI acts as a decision-support assistant that converts user context and live operational inputs into clear guidance.
+Large football stadiums usually give fans generic maps and broad instructions. During match day, that is not enough.
 
-## Approach and Logic
+A fan in the East Stand does not need the whole stadium map. They need fast answers to questions such as:
 
-The project uses a lightweight decision engine to analyze stadium context.
+- Where is my seat?
+- Which gate should I use?
+- Where is the nearest toilet?
+- Where can I get water?
+- Where is the nearest first aid room?
+- Which exit should I use after the match?
 
-The system considers:
+StadiumFlow AI solves this by using the fan's ticket as the starting point for personalised guidance.
 
-- User type
-- Current location
-- Fan need
-- Crowd level
-- Wait time
-- Incident count
-- Zone risk
-- Accessibility needs
-- Volunteer role
+## Solution
 
-Based on these inputs, the system generates:
+The app follows a simple ticket-aware flow:
 
-- Fan guidance
-- Crowd-risk labels
-- Ranked stadium zones
-- Volunteer briefings
-- Accessibility-aware movement advice
-
-The app uses transparent rule-based logic to simulate GenAI-style assistance without requiring external APIs or secret keys.
-
-## How the Solution Works
-
-The app contains four assistant modes:
-
-### 1. Fan Assistant
-
-Fans enter their location and need. The assistant generates short, clear guidance for navigation, transport, medical support, food zones, or exits.
-
-### 2. Crowd Intelligence Dashboard
-
-Venue staff enter crowd levels, wait times, and incidents for stadium zones. The system calculates a risk score and ranks zones by operational priority.
-
-### 3. Volunteer Briefing Generator
-
-Organizers can generate short volunteer instructions based on zone, issue type, and risk level.
-
-### 4. Accessibility Support
-
-The assistant creates simple guidance for wheelchair users, elderly visitors, low-vision visitors, families, and lost visitors.
-
-## Assumptions Made
-
-- Crowd level is entered on a 1 to 5 scale.
-- Wait time is estimated by venue staff.
-- Incident count refers to currently reported local issues.
-- The app is a prototype and does not connect to live stadium sensors.
-- The system does not collect or store personal data.
-
-## Evaluation Alignment
-
-### Code Quality
-
-The project separates UI code from decision logic. `app.py` handles the Streamlit interface, while `stadium_engine.py` contains the scoring and recommendation logic.
-
-### Security
-
-The app does not use API keys, passwords, databases, or private user data. It can run locally without secrets.
-
-### Efficiency
-
-The app is lightweight and uses simple Python logic. It has minimal dependencies and stays well under the 10 MB repository limit.
-
-### Testing
-
-The core functions are tested using Pytest in `tests/test_stadium_engine.py`.
-
-### Accessibility
-
-The app includes accessibility-specific guidance for wheelchair access, elderly support, low-vision support, hearing support, families, and lost visitors.
-
-## Tech Stack
-
-- Python
-- Streamlit
-- Pandas
-- Pytest
+```text
+Ticket number
+→ Ticket profile
+→ Fan zone
+→ Zone-specific facilities
+→ MyZone AI guidance
