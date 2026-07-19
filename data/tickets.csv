@@ -1,0 +1,4 @@
+ticket_id,fan_name,match,home_team,away_team,kickoff_time,gate,zone,stand,block,row,seat,preferred_language
+SF-FB-EAST-A12-0823,Ravi Kumar,India FC vs Kerala Blasters,India FC,Kerala Blasters,19:30,Gate 3,East Zone,East Stand,A12,08,23,Telugu
+SF-FB-NORTH-B04-1145,Aisha Khan,India FC vs Kerala Blasters,India FC,Kerala Blasters,19:30,Gate 1,North Zone,North Stand,B04,11,45,Hindi
+SF-FB-WEST-C09-0520,John Mathew,India FC vs Kerala Blasters,India FC,Kerala Blasters,19:30,Gate 5,West Zone,West Stand,C09,05,20,English
