@@ -20,6 +20,7 @@ Security note:
 from __future__ import annotations
 
 import os
+import re
 from typing import Optional
 
 import pandas as pd
@@ -213,7 +214,6 @@ def load_default_facilities() -> pd.DataFrame:
 def validate_columns(
     dataframe: pd.DataFrame,
     required_columns: list[str],
-    dataset_name: str,
 ) -> tuple[bool, list[str]]:
     """Check whether uploaded/default data has the required columns."""
     missing_columns = [
@@ -234,6 +234,13 @@ def load_demo_or_uploaded_data() -> tuple[pd.DataFrame, pd.DataFrame, str]:
     editing the GitHub repository.
     """
     st.sidebar.markdown("### Optional Reviewer Data Upload")
+
+    with st.sidebar.expander("Required CSV format", expanded=False):
+        st.markdown("**tickets.csv columns**")
+        st.code(", ".join(REQUIRED_TICKET_COLUMNS))
+
+        st.markdown("**facilities.csv columns**")
+        st.code(", ".join(REQUIRED_FACILITY_COLUMNS))
 
     uploaded_tickets = st.sidebar.file_uploader(
         "Upload custom tickets.csv",
@@ -260,13 +267,11 @@ def load_demo_or_uploaded_data() -> tuple[pd.DataFrame, pd.DataFrame, str]:
         tickets_valid, missing_ticket_columns = validate_columns(
             tickets_df,
             REQUIRED_TICKET_COLUMNS,
-            "tickets.csv",
         )
 
         facilities_valid, missing_facility_columns = validate_columns(
             facilities_df,
             REQUIRED_FACILITY_COLUMNS,
-            "facilities.csv",
         )
 
         if not tickets_valid:
@@ -325,16 +330,21 @@ def get_gemini_api_key() -> Optional[str]:
     """
     Read Gemini API key from Streamlit Secrets or environment variable.
 
-    Recommended Streamlit Cloud secret:
+    Streamlit Cloud secret format:
     GEMINI_API_KEY = "your_api_key_here"
     """
     try:
-        if "GEMINI_API_KEY" in st.secrets:
-            return st.secrets["GEMINI_API_KEY"]
+        api_key = st.secrets.get("GEMINI_API_KEY")
+        if api_key:
+            return str(api_key).strip()
     except Exception:
         pass
 
-    return os.getenv("GEMINI_API_KEY")
+    env_key = os.getenv("GEMINI_API_KEY")
+    if env_key:
+        return env_key.strip()
+
+    return None
 
 
 def build_fan_context(ticket: dict, zone_facilities: pd.DataFrame) -> str:
@@ -392,11 +402,8 @@ def generate_fallback_answer(
     Safe fallback when Gemini is not configured.
 
     This keeps the demo usable without exposing API keys.
-    The matching uses whole-word checks to avoid mistakes such as
-    matching 'eat' inside 'seat'.
+    Whole-word matching avoids mistakes such as matching 'eat' inside 'seat'.
     """
-    import re
-
     question_lower = question.lower()
 
     def has_any_word(words: list[str]) -> bool:
@@ -417,8 +424,6 @@ def generate_fallback_answer(
 
         return matches.sort_values("distance_minutes").iloc[0]
 
-    # Seat and gate guidance should be checked before food,
-    # because the word "seat" contains "eat".
     if has_any_word(["seat", "seating", "gate", "block", "row"]):
         return (
             f"Use {ticket['gate']} and go to {ticket['stand']}, Block {ticket['block']}, "
@@ -500,6 +505,8 @@ def generate_myzone_ai_answer(
     api_key = get_gemini_api_key()
 
     if not api_key:
+        st.sidebar.error("Gemini API key not found.")
+        st.sidebar.caption("Add GEMINI_API_KEY in Streamlit Secrets, then reboot the app.")
         return generate_fallback_answer(question, ticket, zone_facilities), False
 
     try:
@@ -519,11 +526,14 @@ Fan question:
         response = model.generate_content(prompt)
 
         if not response.text:
+            st.sidebar.error("Gemini returned an empty response.")
             return generate_fallback_answer(question, ticket, zone_facilities), False
 
         return response.text.strip(), True
 
-    except Exception:
+    except Exception as error:
+        st.sidebar.error("Gemini call failed.")
+        st.sidebar.code(str(error))
         return generate_fallback_answer(question, ticket, zone_facilities), False
 
 
@@ -594,27 +604,26 @@ def render_sidebar() -> None:
     st.sidebar.divider()
 
 
-def render_data_status(data_source: str, tickets_df: pd.DataFrame, facilities_df: pd.DataFrame) -> None:
+def render_data_status(
+    data_source: str,
+    tickets_df: pd.DataFrame,
+    facilities_df: pd.DataFrame,
+) -> None:
     """Show which data source is currently active."""
     if data_source == "uploaded":
         st.success("Reviewer-uploaded CSV data is active for this session.")
     else:
         st.info("Using built-in sample football ticket and facility data.")
 
-    with st.expander("Data format expected by this app"):
-        st.markdown("**tickets.csv columns**")
-        st.code(", ".join(REQUIRED_TICKET_COLUMNS))
-
-        st.markdown("**facilities.csv columns**")
-        st.code(", ".join(REQUIRED_FACILITY_COLUMNS))
-
-        st.markdown(
-            f"""
-            Current loaded data:
-            - Tickets: {len(tickets_df)} rows
-            - Facilities: {len(facilities_df)} rows
-            """
-        )
+    st.markdown(
+        f"""
+        <p class="small-note">
+            Current loaded data: <b>{len(tickets_df)}</b> tickets and
+            <b>{len(facilities_df)}</b> facilities.
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_ticket_login(tickets_df: pd.DataFrame) -> None:
@@ -650,7 +659,9 @@ def render_ticket_login(tickets_df: pd.DataFrame) -> None:
         ticket = get_ticket(ticket_id, tickets_df)
 
         if ticket is None:
-            st.error("Invalid ticket number. Try a demo ticket or check the uploaded tickets.csv file.")
+            st.error(
+                "Invalid ticket number. Try a demo ticket or check the uploaded tickets.csv file."
+            )
         else:
             st.session_state.ticket = ticket
             st.rerun()
