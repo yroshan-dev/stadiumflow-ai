@@ -1,18 +1,19 @@
 """
 StadiumFlow AI
-v0.2.0 – Football Fan Ticket Assistant
+v0.2.1 – Football Fan Ticket Assistant
 
 A Streamlit prototype for football match fans.
 
 Core flow:
 1. Fan enters a ticket number.
-2. App loads ticket details from data/tickets.csv.
-3. App filters facilities from data/facilities.csv based on the fan's zone.
+2. App loads ticket details from default CSV data or reviewer-uploaded CSV files.
+3. App filters facilities based on the fan's ticket zone.
 4. MyZone AI answers match-day questions using ticket-specific context.
 
 Security note:
 - No personal data is stored.
-- Ticket data is mock data for prototype demonstration.
+- Default ticket data is mock data for prototype demonstration.
+- Reviewer-uploaded CSV data is only used during the active Streamlit session.
 - Gemini API key should be stored in Streamlit Secrets, not committed to GitHub.
 """
 
@@ -161,19 +162,139 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------
-# Data loading
+# Required data schema
+# ---------------------------------------------------------------------
+
+REQUIRED_TICKET_COLUMNS = [
+    "ticket_id",
+    "fan_name",
+    "match",
+    "home_team",
+    "away_team",
+    "kickoff_time",
+    "gate",
+    "zone",
+    "stand",
+    "block",
+    "row",
+    "seat",
+    "preferred_language",
+]
+
+REQUIRED_FACILITY_COLUMNS = [
+    "facility_id",
+    "type",
+    "name",
+    "zone",
+    "stand",
+    "near_block",
+    "level",
+    "distance_minutes",
+    "status",
+]
+
+
+# ---------------------------------------------------------------------
+# Data loading and validation
 # ---------------------------------------------------------------------
 
 @st.cache_data
-def load_tickets() -> pd.DataFrame:
-    """Load mock football match ticket data."""
+def load_default_tickets() -> pd.DataFrame:
+    """Load default mock football match ticket data."""
     return pd.read_csv("data/tickets.csv")
 
 
 @st.cache_data
-def load_facilities() -> pd.DataFrame:
-    """Load mock stadium facility data."""
+def load_default_facilities() -> pd.DataFrame:
+    """Load default mock stadium facility data."""
     return pd.read_csv("data/facilities.csv")
+
+
+def validate_columns(
+    dataframe: pd.DataFrame,
+    required_columns: list[str],
+    dataset_name: str,
+) -> tuple[bool, list[str]]:
+    """Check whether uploaded/default data has the required columns."""
+    missing_columns = [
+        column for column in required_columns if column not in dataframe.columns
+    ]
+
+    if missing_columns:
+        return False, missing_columns
+
+    return True, []
+
+
+def load_demo_or_uploaded_data() -> tuple[pd.DataFrame, pd.DataFrame, str]:
+    """
+    Load default sample data or reviewer-uploaded CSV files.
+
+    Reviewers can upload their own football match tickets and facilities without
+    editing the GitHub repository.
+    """
+    st.sidebar.markdown("### Optional Reviewer Data Upload")
+
+    uploaded_tickets = st.sidebar.file_uploader(
+        "Upload custom tickets.csv",
+        type=["csv"],
+        help="Optional. Must follow the same columns as the sample tickets.csv file.",
+    )
+
+    uploaded_facilities = st.sidebar.file_uploader(
+        "Upload custom facilities.csv",
+        type=["csv"],
+        help="Optional. Must follow the same columns as the sample facilities.csv file.",
+    )
+
+    if uploaded_tickets is not None or uploaded_facilities is not None:
+        if uploaded_tickets is None or uploaded_facilities is None:
+            st.sidebar.warning("Upload both CSV files to use custom reviewer data.")
+            tickets_df = load_default_tickets()
+            facilities_df = load_default_facilities()
+            return tickets_df, facilities_df, "sample"
+
+        tickets_df = pd.read_csv(uploaded_tickets)
+        facilities_df = pd.read_csv(uploaded_facilities)
+
+        tickets_valid, missing_ticket_columns = validate_columns(
+            tickets_df,
+            REQUIRED_TICKET_COLUMNS,
+            "tickets.csv",
+        )
+
+        facilities_valid, missing_facility_columns = validate_columns(
+            facilities_df,
+            REQUIRED_FACILITY_COLUMNS,
+            "facilities.csv",
+        )
+
+        if not tickets_valid:
+            st.sidebar.error(
+                "Uploaded tickets.csv is missing: "
+                + ", ".join(missing_ticket_columns)
+            )
+            tickets_df = load_default_tickets()
+            facilities_df = load_default_facilities()
+            return tickets_df, facilities_df, "sample"
+
+        if not facilities_valid:
+            st.sidebar.error(
+                "Uploaded facilities.csv is missing: "
+                + ", ".join(missing_facility_columns)
+            )
+            tickets_df = load_default_tickets()
+            facilities_df = load_default_facilities()
+            return tickets_df, facilities_df, "sample"
+
+        st.sidebar.success("Using uploaded reviewer data.")
+        return tickets_df, facilities_df, "uploaded"
+
+    tickets_df = load_default_tickets()
+    facilities_df = load_default_facilities()
+
+    st.sidebar.info("Using built-in sample data.")
+    return tickets_df, facilities_df, "sample"
 
 
 def get_ticket(ticket_id: str, tickets_df: pd.DataFrame) -> Optional[dict]:
@@ -182,7 +303,7 @@ def get_ticket(ticket_id: str, tickets_df: pd.DataFrame) -> Optional[dict]:
         return None
 
     matched_ticket = tickets_df[
-        tickets_df["ticket_id"].str.upper() == ticket_id.strip().upper()
+        tickets_df["ticket_id"].astype(str).str.upper() == ticket_id.strip().upper()
     ]
 
     if matched_ticket.empty:
@@ -228,6 +349,9 @@ def build_fan_context(ticket: dict, zone_facilities: pd.DataFrame) -> str:
             for _, row in zone_facilities.iterrows()
         ]
     )
+
+    if not facilities_text:
+        facilities_text = "No facilities are listed for this zone."
 
     return f"""
 You are MyZone AI, a GenAI-powered football match-day assistant.
@@ -442,7 +566,7 @@ def render_reason(title: str, points: list[str]) -> None:
 def render_sidebar() -> None:
     """Render sidebar information for reviewers."""
     st.sidebar.title("StadiumFlow AI")
-    st.sidebar.caption("v0.2.0 – Football Fan Ticket Assistant")
+    st.sidebar.caption("v0.2.1 – Football Fan Ticket Assistant")
 
     st.sidebar.divider()
 
@@ -466,6 +590,31 @@ def render_sidebar() -> None:
         """
     )
 
+    st.sidebar.divider()
+
+
+def render_data_status(data_source: str, tickets_df: pd.DataFrame, facilities_df: pd.DataFrame) -> None:
+    """Show which data source is currently active."""
+    if data_source == "uploaded":
+        st.success("Reviewer-uploaded CSV data is active for this session.")
+    else:
+        st.info("Using built-in sample football ticket and facility data.")
+
+    with st.expander("Data format expected by this app"):
+        st.markdown("**tickets.csv columns**")
+        st.code(", ".join(REQUIRED_TICKET_COLUMNS))
+
+        st.markdown("**facilities.csv columns**")
+        st.code(", ".join(REQUIRED_FACILITY_COLUMNS))
+
+        st.markdown(
+            f"""
+            Current loaded data:
+            - Tickets: {len(tickets_df)} rows
+            - Facilities: {len(facilities_df)} rows
+            """
+        )
+
 
 def render_ticket_login(tickets_df: pd.DataFrame) -> None:
     """Render ticket login screen."""
@@ -479,8 +628,8 @@ def render_ticket_login(tickets_df: pd.DataFrame) -> None:
     st.markdown(
         """
         <p class="small-note">
-            This prototype simulates ticket login using mock football ticket data.
-            In production, this step would connect to a real ticketing or QR validation system.
+            This prototype simulates ticket login using football ticket data.
+            Reviewers may use the built-in sample tickets or upload their own CSV files from the sidebar.
         </p>
         """,
         unsafe_allow_html=True,
@@ -500,7 +649,7 @@ def render_ticket_login(tickets_df: pd.DataFrame) -> None:
         ticket = get_ticket(ticket_id, tickets_df)
 
         if ticket is None:
-            st.error("Invalid ticket number. Try one of the demo tickets in the sidebar.")
+            st.error("Invalid ticket number. Try a demo ticket or check the uploaded tickets.csv file.")
         else:
             st.session_state.ticket = ticket
             st.rerun()
@@ -557,11 +706,14 @@ def render_zone_facilities(ticket: dict, zone_facilities: pd.DataFrame) -> None:
         "status",
     ]
 
-    st.dataframe(
-        zone_facilities[display_columns],
-        use_container_width=True,
-        hide_index=True,
-    )
+    if zone_facilities.empty:
+        st.warning("No facilities are listed for this ticket zone.")
+    else:
+        st.dataframe(
+            zone_facilities[display_columns],
+            use_container_width=True,
+            hide_index=True,
+        )
 
     render_reason(
         "Why this is personalised",
@@ -662,12 +814,17 @@ def render_myzone_ai(ticket: dict, zone_facilities: pd.DataFrame) -> None:
             )
 
 
-def render_app(tickets_df: pd.DataFrame, facilities_df: pd.DataFrame) -> None:
+def render_app(
+    tickets_df: pd.DataFrame,
+    facilities_df: pd.DataFrame,
+    data_source: str,
+) -> None:
     """Render the main app flow."""
     if "ticket" not in st.session_state:
         st.session_state.ticket = None
 
     render_hero()
+    render_data_status(data_source, tickets_df, facilities_df)
 
     if st.session_state.ticket is None:
         render_ticket_login(tickets_df)
@@ -698,7 +855,7 @@ def render_app(tickets_df: pd.DataFrame, facilities_df: pd.DataFrame) -> None:
     st.markdown(
         """
         <div class="footer-note">
-            Built with Python and Streamlit. This prototype uses mock ticket and facility data,
+            Built with Python and Streamlit. This prototype uses football ticket and facility data,
             avoids storing personal data, and demonstrates ticket-aware GenAI support for football match fans.
         </div>
         """,
@@ -711,11 +868,11 @@ def render_app(tickets_df: pd.DataFrame, facilities_df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------
 
 try:
-    tickets = load_tickets()
-    facilities = load_facilities()
-
     render_sidebar()
-    render_app(tickets, facilities)
+
+    tickets, facilities, active_data_source = load_demo_or_uploaded_data()
+
+    render_app(tickets, facilities, active_data_source)
 
 except FileNotFoundError as missing_file_error:
     st.error("Required data file is missing.")
